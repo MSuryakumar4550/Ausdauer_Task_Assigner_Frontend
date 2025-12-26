@@ -14,7 +14,10 @@ const Login = () => {
     setLoading(true);
     setError("");
     try {
-      const res = await axios.post("http://localhost:8080/api/auth/login", { email, password });
+      // This dynamically picks the Render URL if it exists, otherwise falls back to localhost for your testing
+      const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8080";
+
+      const res = await axios.post(`${API_URL}/api/auth/login`, { email, password });
       
       // Store user data securely
       localStorage.setItem("token", res.data.token);
