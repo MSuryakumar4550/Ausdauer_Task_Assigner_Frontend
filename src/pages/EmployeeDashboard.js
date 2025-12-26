@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 
-const socket = io("http://localhost:8080");
+// CENTRALIZED API CONFIGURATION
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8080";
+const socket = io(API_BASE_URL);
 
 function EmployeeDashboard() {
   const [tasks, setTasks] = useState([]);
@@ -27,13 +29,13 @@ function EmployeeDashboard() {
 
   const fetchTasks = async () => {
     try {
-      const res = await axios.get("http://localhost:8080/api/tasks/my-tasks", { 
+      // Replaced localhost with API_BASE_URL
+      const res = await axios.get(`${API_BASE_URL}/api/tasks/my-tasks`, { 
         headers: { Authorization: `Bearer ${token}` } 
       });
       setTasks(res.data);
       setLoading(false);
     } catch (err) { 
-      // Catching the 403 status to trigger the Blocked UI
       if (err.response && err.response.status === 403) {
           setIsRevoked(true);
       }
@@ -45,13 +47,14 @@ function EmployeeDashboard() {
   useEffect(() => {
     if (token) fetchTasks();
     socket.on("refresh_data", fetchTasks);
-    return () => socket.off("refresh_data");
+    return () => socket.off("refresh_data"); // Essential cleanup for Microsoft/Google standards
   }, [token]);
 
   const handleStatusChange = async (taskId, newStatus) => {
     setActionLoading(true);
     try {
-      await axios.put("http://localhost:8080/api/tasks/update-status", 
+      // Replaced localhost with API_BASE_URL
+      await axios.put(`${API_BASE_URL}/api/tasks/update-status`, 
         { taskId, status: newStatus }, 
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -68,7 +71,8 @@ function EmployeeDashboard() {
     e.preventDefault();
     setActionLoading(true);
     try {
-      await axios.put("http://localhost:8080/api/users/update-profile", 
+      // Replaced localhost with API_BASE_URL
+      await axios.put(`${API_BASE_URL}/api/users/update-profile`, 
         { name: profileUpdate.name, designation: profileUpdate.designation, otp: profileUpdate.otp, newPassword: profileUpdate.newPassword }, 
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -84,8 +88,9 @@ function EmployeeDashboard() {
   const requestOTP = async () => {
     setActionLoading(true);
     try {
-      await axios.post("http://localhost:8080/api/users/request-verification", {}, { headers: { Authorization: `Bearer ${token}` } });
-      setStep(2); // Revealing the hidden input fields
+      // Replaced localhost with API_BASE_URL
+      await axios.post(`${API_BASE_URL}/api/users/request-verification`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      setStep(2); 
       showNotification("📧 OTP sent! Check email or terminal.", "success");
     } catch (err) { showNotification("❌ OTP Request Failed", "error"); }
     finally { setActionLoading(false); }
@@ -129,7 +134,6 @@ function EmployeeDashboard() {
         </div>
       )}
 
-      {/* REFINED VIBRANT TOAST */}
       <div style={{ 
         ...toastStyle, 
         transform: toast.show ? 'translateX(-50%) translateY(0)' : 'translateX(-50%) translateY(-150px)', 
@@ -167,7 +171,6 @@ function EmployeeDashboard() {
                <input type="text" placeholder="Update Designation" style={inputStyle} onChange={(e) => setProfileUpdate({...profileUpdate, designation: e.target.value})} />
                <hr style={{margin: '1.5rem 0', borderColor: '#1f2937'}} />
                
-               {/* SECURITY FLOW WITH PROGRESSIVE DISCLOSURE */}
                <p style={labelStyle}>Security Reset</p>
                {step === 1 ? (
                  <button type="button" onClick={requestOTP} style={btnStyle} disabled={actionLoading}>
@@ -177,9 +180,6 @@ function EmployeeDashboard() {
                  <div style={{ animation: 'fadeIn 0.4s ease' }}>
                    <input type="text" placeholder="6-Digit OTP" required style={inputStyle} onChange={(e) => setProfileUpdate({...profileUpdate, otp: e.target.value})} />
                    <input type="password" placeholder="New Password" required style={inputStyle} onChange={(e) => setProfileUpdate({...profileUpdate, newPassword: e.target.value})} />
-                   <p style={{ fontSize: '0.7rem', color: '#fbbf24', textAlign: 'left', marginTop: '-5px', marginBottom: '10px' }}>
-                     * Enter the code sent to your terminal/email.
-                   </p>
                  </div>
                )}
                
@@ -212,7 +212,7 @@ function EmployeeDashboard() {
   );
 }
 
-// STYLES
+// STYLES (Keep exactly as they were)
 const labelStyle = { fontSize: '0.75rem', color: '#9ca3af', textAlign: 'left', marginBottom: '5px' };
 const avatarStyle = { width: '45px', height: '45px', background: '#8b5cf6', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', cursor: 'pointer', border: '2px solid #374151' };
 const dropdownStyle = { position: 'absolute', top: '55px', right: 0, background: '#0f172a', border: '1px solid #1f2937', padding: '0.5rem', borderRadius: '10px', width: '150px', zIndex: 100 };

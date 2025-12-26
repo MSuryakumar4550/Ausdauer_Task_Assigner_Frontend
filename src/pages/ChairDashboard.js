@@ -2,7 +2,9 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:8080");
+// CENTRALIZED API CONFIGURATION
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8080";
+const socket = io(API_BASE_URL);
 
 const ChairDashboard = () => {
   const [tasks, setTasks] = useState([]);
@@ -15,14 +17,15 @@ const ChairDashboard = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
-  
   const [showRevokeModal, setShowRevokeModal] = useState(false);
   const [targetEmployeeId, setTargetEmployeeId] = useState(null);
-  
   const [step, setStep] = useState(1); 
 
   const token = localStorage.getItem("token");
   const userName = localStorage.getItem("userName") || "C";
+
+  // HELPER FOR API CALLS
+  const authHeader = { headers: { Authorization: `Bearer ${token}` } };
 
   const showNotification = (message, type = "success") => {
     setToast({ show: true, message, type });
@@ -31,9 +34,9 @@ const ChairDashboard = () => {
 
   const fetchData = async () => {
     try {
-      const taskRes = await axios.get("http://localhost:8080/api/tasks/chair-tasks", { headers: { Authorization: `Bearer ${token}` } });
+      const taskRes = await axios.get(`${API_BASE_URL}/api/tasks/chair-tasks`, authHeader);
       setTasks(taskRes.data);
-      const userRes = await axios.get("http://localhost:8080/api/auth/employees", { headers: { Authorization: `Bearer ${token}` } });
+      const userRes = await axios.get(`${API_BASE_URL}/api/auth/employees`, authHeader);
       setEmployees(userRes.data);
     } catch (err) { console.error("Sync Error", err); }
   };
@@ -57,7 +60,7 @@ const ChairDashboard = () => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await axios.post("http://localhost:8080/api/tasks/create", formData, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.post(`${API_BASE_URL}/api/tasks/create`, formData, authHeader);
       socket.emit("task_action");
       setFormData({ title: "", description: "", priority: "Medium", deadline: "", assigned_to: "" });
       showNotification("🚀 Task Pushed Successfully!");
@@ -69,7 +72,7 @@ const ChairDashboard = () => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await axios.post("http://localhost:8080/api/users/register", newUser, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.post(`${API_BASE_URL}/api/users/register`, newUser, authHeader);
       setNewUser({ name: "", email: "", password: "", role: "EMPLOYEE", designation: "" });
       socket.emit("task_action");
       showNotification("👤 New Employee Registered!");
@@ -85,9 +88,9 @@ const ChairDashboard = () => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await axios.put("http://localhost:8080/api/users/update-profile", 
+      await axios.put(`${API_BASE_URL}/api/users/update-profile`, 
         { name: profileUpdate.name, designation: profileUpdate.designation, otp: profileUpdate.otp, newPassword: profileUpdate.newPassword }, 
-        { headers: { Authorization: `Bearer ${token}` } }
+        authHeader
       );
       showNotification("✅ Account Updated Successfully!");
       setShowVerifyModal(false);
@@ -102,25 +105,20 @@ const ChairDashboard = () => {
   const requestOTP = async () => {
     setIsLoading(true);
     try {
-      await axios.post("http://localhost:8080/api/users/request-verification", {}, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.post(`${API_BASE_URL}/api/users/request-verification`, {}, authHeader);
       setStep(2);
       showNotification("📧 OTP sent! Check email or terminal.");
     } catch (err) { showNotification("❌ OTP Request Failed", "error"); }
     finally { setIsLoading(false); }
   };
 
-  const triggerRevokeConfirm = (id) => {
-    setTargetEmployeeId(id);
-    setShowRevokeModal(true);
-  };
-
   const confirmRevokeAction = async () => {
     setIsLoading(true);
     try {
-      await axios.delete(`http://localhost:8080/api/users/remove/${targetEmployeeId}`, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.delete(`${API_BASE_URL}/api/users/remove/${targetEmployeeId}`, authHeader);
       socket.emit("task_action");
       showNotification("👤 Employee Revoked Successfully!", "success");
-      fetchData(); // This refreshes the list with the new 'is_active' status
+      fetchData();
       setShowRevokeModal(false);
     } catch (err) { showNotification("❌ Removal Failed", "error"); }
     finally { setIsLoading(false); }
@@ -193,9 +191,7 @@ const ChairDashboard = () => {
               <div style={{ ...modalContent, textAlign: 'center', border: '1px solid #ef4444' }}>
                   <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
                   <h3 style={{ color: 'white', marginBottom: '0.5rem' }}>Confirm Revocation</h3>
-                  <p style={{ color: '#9ca3af', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-                      Are you sure? This employee will lose all system access immediately. This action is recorded in the audit logs.
-                  </p>
+                  <p style={{ color: '#9ca3af', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Are you sure? This employee will lose access immediately.</p>
                   <div style={{ display: 'flex', gap: '1rem' }}>
                       <button onClick={() => setShowRevokeModal(false)} style={{ ...btnStyle, background: '#1f2937' }}>Cancel</button>
                       <button onClick={confirmRevokeAction} style={{ ...btnStyle, background: '#ef4444' }}>Yes, Revoke</button>
@@ -225,7 +221,7 @@ const ChairDashboard = () => {
             <input type="text" placeholder="Name" required style={inputStyle} onChange={(e) => setNewUser({...newUser, name: e.target.value})} value={newUser.name} />
             <input type="email" placeholder="Email" required style={inputStyle} onChange={(e) => setNewUser({...newUser, email: e.target.value})} value={newUser.email} />
             <input type="password" placeholder="Password" required style={inputStyle} onChange={(e) => setNewUser({...newUser, password: e.target.value})} value={newUser.password} />
-            <input type="text" placeholder="Designation (e.g. Intern)" required style={inputStyle} onChange={(e) => setNewUser({...newUser, designation: e.target.value})} value={newUser.designation} />
+            <input type="text" placeholder="Designation" required style={inputStyle} onChange={(e) => setNewUser({...newUser, designation: e.target.value})} value={newUser.designation} />
             <button type="submit" style={{ ...btnStyle, background: '#10b981' }} disabled={isLoading}>Register User</button>
           </form>
         </div>
@@ -248,20 +244,12 @@ const ChairDashboard = () => {
                 <td style={{ padding: '1rem 0' }}>{t.title}</td>
                 <td>{t.employee_name}</td>
                 <td>
-                  <span style={{ 
-                    padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 'bold',
-                    ...getStatusStyle(t.status) 
-                  }}>
+                  <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 'bold', ...getStatusStyle(t.status) }}>
                     {t.status}
                   </span>
                 </td>
                 <td>
-                  {/* FIXED: We check is_active from the backend query */}
-                  {t.is_active === 0 ? (
-                    <button disabled style={{ ...removeBtnStyle, background: 'rgba(156, 163, 175, 0.1)', color: '#9ca3af', border: '1px solid #9ca3af', cursor: 'not-allowed' }}>Revoked</button>
-                  ) : (
-                    <button onClick={() => triggerRevokeConfirm(t.assigned_to)} style={removeBtnStyle} disabled={isLoading}>Revoke Access</button>
-                  )}
+                  <button onClick={() => { setTargetEmployeeId(t.assigned_to); setShowRevokeModal(true); }} style={removeBtnStyle}>Revoke</button>
                 </td>
               </tr>
             ))}
@@ -272,19 +260,20 @@ const ChairDashboard = () => {
   );
 };
 
+// PROFESSIONAL STYLES
 const avatarStyle = { width: '42px', height: '42px', background: '#8b5cf6', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', cursor: 'pointer', border: '2px solid #1f2937' };
-const dropdownStyle = { position: 'absolute', top: '50px', right: 0, background: '#0f172a', border: '1px solid #1f2937', padding: '0.8rem', borderRadius: '12px', width: '160px', zIndex: 100, boxShadow: '0 10px 25px rgba(0,0,0,0.5)' };
-const dropItem = { width: '100%', background: 'none', border: 'none', color: 'white', padding: '0.6rem', textAlign: 'left', cursor: 'pointer', borderRadius: '6px', fontSize: '0.9rem' };
+const dropdownStyle = { position: 'absolute', top: '50px', right: 0, background: '#0f172a', border: '1px solid #1f2937', padding: '0.8rem', borderRadius: '12px', width: '160px', zIndex: 100 };
+const dropItem = { width: '100%', background: 'none', border: 'none', color: 'white', padding: '0.6rem', textAlign: 'left', cursor: 'pointer' };
 const modalOverlay = { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(2, 6, 23, 0.95)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10002 };
 const modalContent = { background: '#0f172a', padding: '1.5rem', borderRadius: '1.5rem', width: '340px', border: '1px solid #1f2937' };
 const loaderOverlay = { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(2, 6, 23, 0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10001 };
 const toastStyle = { position: 'fixed', top: '20px', left: '50%', padding: '0.8rem 2rem', borderRadius: '50px', color: 'white', zIndex: 9999, fontWeight: 'bold', transition: '0.4s' };
-const removeBtnStyle = { background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid #ef4444', padding: '0.4rem 0.8rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' };
-const logoutBtn = { width: '100%', background: '#ef4444', color: 'white', border: 'none', padding: '0.5rem', borderRadius: '5px', cursor: 'pointer', marginTop: '5px' };
+const removeBtnStyle = { background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid #ef4444', padding: '0.4rem 0.8rem', borderRadius: '6px', cursor: 'pointer' };
+const logoutBtn = { width: '100%', background: '#ef4444', color: 'white', border: 'none', padding: '0.5rem', borderRadius: '5px', marginTop: '5px' };
 const headerStyle = { display: 'flex', justifyContent: 'space-between', marginBottom: '2rem', alignItems: 'center' };
 const cardStyle = { background: '#0f172a', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #1f2937' };
 const inputStyle = { width: '100%', marginBottom: '0.8rem', padding: '0.7rem', background: '#020617', border: '1px solid #374151', color: 'white', borderRadius: '8px' };
 const btnStyle = { width: '100%', background: '#8b5cf6', color: 'white', padding: '0.7rem', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' };
-const labelStyle = { fontSize: '0.75rem', color: '#9ca3af', textAlign: 'left', marginBottom: '5px' };
+const labelStyle = { fontSize: '0.75rem', color: '#9ca3af', marginBottom: '5px' };
 
 export default ChairDashboard;
